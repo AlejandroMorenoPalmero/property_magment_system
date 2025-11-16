@@ -1,0 +1,27 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment variables
+.env
+*.env
+
+# Zone identifier metadata (Windows → WSL)
+*Zone.Identifier
+
+# Virtual environments
+venv/
+.env/
+*.egg-info/
+
+# Docker junk
+*.log
+docker-compose.override.yml
+
+# System / editor files
+.DS_Store
+Thumbs.db
+
+# Installer or temp binaries
+Miniconda3-latest-*.sh
