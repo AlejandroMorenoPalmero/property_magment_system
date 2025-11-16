@@ -25,7 +25,6 @@ services:
       - .env
     volumes:
       # Mount application code for development (optional - remove in production)
-      - ./app.py:/app/app.py
       - ./services:/app/services
       # Persist Streamlit cache
       - streamlit-cache:/home/streamlit_user/.streamlit
