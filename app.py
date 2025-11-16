@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import date, timedelta
 from streamlit_calendar import calendar
 from streamlit_javascript import st_javascript
-from services.BBDD_query import fetch_table
-from services.BBDD_conection import get_connection
+from services.bbdd_query import fetch_table
+from services.bbdd_conection import get_connection
 import mysql.connector
 from decimal import Decimal
 
