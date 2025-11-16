@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  property-manager-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: property_management_system
+    ports:
+      - "8501:8501"
+    environment:
+      # Database configuration
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_PORT=${MYSQL_PORT}
+      # Legacy variables for compatibility
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=${DB_PORT}
+    env_file:
+      - .env
+    volumes:
+      # Mount application code for development (optional - remove in production)
+      - ./app.py:/app/app.py
+      - ./services:/app/services
+      # Persist Streamlit cache
+      - streamlit-cache:/home/streamlit_user/.streamlit
+    restart: unless-stopped
+    networks:
+      - property-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  property-network:
+    driver: bridge
+
+volumes:
+  streamlit-cache:
+    driver: local
