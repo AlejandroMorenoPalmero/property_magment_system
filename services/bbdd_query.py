@@ -2,7 +2,7 @@
 Extract data from the database tables.
 """
 
-from services.BBDD_conection import get_connection
+from services.bbdd_conection import get_connection
 
 
 def fetch_table(table_name='bookings', limit=None):
