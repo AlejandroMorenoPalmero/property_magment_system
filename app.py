@@ -65,6 +65,9 @@ if st.session_state.bookings_table_visible and st.session_state.bookings_data is
     try:
         # Load fresh data from DB
         cols_fresh, rows_fresh = fetch_table("bookings")
+        print("Auto-loading bookings data...")
+        print(f"Columns: {cols_fresh}")
+        print(f"Total rows fetched: {len(rows_fresh)}")
         
         if rows_fresh:
             # Filter by dates - include:
