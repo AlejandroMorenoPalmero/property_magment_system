@@ -8,6 +8,11 @@ from services.bbdd_query import fetch_table
 from services.bbdd_conection import get_connection
 import mysql.connector
 from decimal import Decimal
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # ---------------- Helper Functions ----------------
 def safe_convert_value(value):
@@ -29,11 +34,7 @@ if 'db_data_loaded' not in st.session_state:
     st.session_state.db_data_loaded = True
     st.session_state.db_cols = cols
     st.session_state.db_rows = rows
-    
-    print("Columns:", cols)
-    print("Bookings:")
-    for row in rows:
-        print(row)
+
 
 
 # ---------------- Config ----------------
@@ -65,9 +66,6 @@ if st.session_state.bookings_table_visible and st.session_state.bookings_data is
     try:
         # Load fresh data from DB
         cols_fresh, rows_fresh = fetch_table("bookings")
-        print("Auto-loading bookings data...")
-        print(f"Columns: {cols_fresh}")
-        print(f"Total rows fetched: {len(rows_fresh)}")
         
         if rows_fresh:
             # Filter by dates - include:
@@ -119,11 +117,22 @@ if st.session_state.bookings_table_visible and st.session_state.bookings_data is
                 booking_data = []
                 for row in filtered_rows:
                     try:
+                        # Extract all data from DB row
+                        record_id = safe_convert_value(row[col_map.get('ID')])
                         booking_id = safe_convert_value(row[col_map.get('Booking ID')])
                         guest_name = safe_convert_value(row[col_map.get('Nombre,Apellidos')]) or "No name"
                         check_in = row[col_map.get('Check-In')]
                         check_out = row[col_map.get('Check-Out')]
                         nights = safe_convert_value(row[col_map.get('Nº Noches')])
+                        persons = safe_convert_value(row[col_map.get('Nº Personas')])
+                        adults = safe_convert_value(row[col_map.get('Nº Adultos')])
+                        children = safe_convert_value(row[col_map.get('Nº Niños')])
+                        booking_number = safe_convert_value(row[col_map.get('Nº Booking')])
+                        status = safe_convert_value(row[col_map.get('Status')])
+                        email = safe_convert_value(row[col_map.get('Email')])
+                        phone = safe_convert_value(row[col_map.get('Movil')])
+                        charges = safe_convert_value(row[col_map.get('Comm y Cargos')])
+                        price = safe_convert_value(row[col_map.get('Precio')])
                         
                         # Convert dates for display
                         if isinstance(check_in, str):
@@ -141,11 +150,21 @@ if st.session_state.bookings_table_visible and st.session_state.bookings_data is
                             check_out_display = str(check_out)
                         
                         booking_data.append({
+                            "Record ID": record_id,
                             "Booking ID": booking_id,
+                            "Booking Number": booking_number,
                             "Name and Surname": guest_name,
                             "Check-In": check_in_display,
                             "Check-Out": check_out_display,
-                            "Nº Nights": nights
+                            "Nº Nights": nights,
+                            "Status": status,
+                            "Persons": persons,
+                            "Adults": adults,
+                            "Children": children,
+                            "Email": email,
+                            "Phone": phone,
+                            "Price": price,
+                            "Charges": charges
                         })
                     except Exception as e:
                         continue
@@ -234,11 +253,22 @@ if cargar:
                 booking_data = []
                 for row in filtered_rows:
                     try:
+                        # Extract all data from DB row
+                        record_id = safe_convert_value(row[col_map.get('ID')])
                         booking_id = safe_convert_value(row[col_map.get('Booking ID')])
                         guest_name = safe_convert_value(row[col_map.get('Nombre,Apellidos')]) or "No name"
                         check_in = row[col_map.get('Check-In')]
                         check_out = row[col_map.get('Check-Out')]
                         nights = safe_convert_value(row[col_map.get('Nº Noches')])
+                        persons = safe_convert_value(row[col_map.get('Nº Personas')])
+                        adults = safe_convert_value(row[col_map.get('Nº Adultos')])
+                        children = safe_convert_value(row[col_map.get('Nº Niños')])
+                        booking_number = safe_convert_value(row[col_map.get('Nº Booking')])
+                        status = safe_convert_value(row[col_map.get('Status')])
+                        email = safe_convert_value(row[col_map.get('Email')])
+                        phone = safe_convert_value(row[col_map.get('Movil')])
+                        charges = safe_convert_value(row[col_map.get('Comm y Cargos')])
+                        price = safe_convert_value(row[col_map.get('Precio')])
                         
                         # Convert dates for display
                         if isinstance(check_in, str):
@@ -256,11 +286,21 @@ if cargar:
                             check_out_display = str(check_out)
                         
                         booking_data.append({
+                            "Record ID": record_id,
                             "Booking ID": booking_id,
+                            "Booking Number": booking_number,
                             "Name and Surname": guest_name,
                             "Check-In": check_in_display,
                             "Check-Out": check_out_display,
-                            "Nº Nights": nights
+                            "Nº Nights": nights,
+                            "Status": status,
+                            "Persons": persons,
+                            "Adults": adults,
+                            "Children": children,
+                            "Email": email,
+                            "Phone": phone,
+                            "Price": price,
+                            "Charges": charges
                         })
                     except Exception as e:
                         print(f"⚠️ Error creating row for table: {e}")
@@ -298,19 +338,126 @@ if st.session_state.bookings_table_visible and st.session_state.bookings_data:
     data = st.session_state.bookings_data
     df = data['df'].copy()
     
-    # Apply conditional styling for check-ins and check-outs within 2 days
-    def highlight_dates_soon(row):
+    # Get electric booking IDs from environment variable (comma-separated)
+    electric_str = os.getenv('ELECTRIC', '')
+    electric_bookings = [b.strip() for b in electric_str.split(',') if b.strip()]
+    
+    # Debug: Print electric bookings list
+    print(f"🔌 Electric bookings from .env: {electric_bookings}")
+    print(f"🔌 Raw ELECTRIC value: '{electric_str}'")
+    
+    # Add Electric Allowance column
+    df['Allowance electric'] = df.apply(
+        lambda row: row['Nº Nights'] * 4 if str(row['Booking ID']).strip() in electric_bookings else 'N/A',
+        axis=1
+    )
+    
+    # Debug: Print DataFrame
+    print("📊 DataFrame creado:")
+    print(df)
+    print(f"\nColumnas: {df.columns.tolist()}")
+    print(f"Forma: {df.shape}")
+    
+    # Custom table with integrated buttons using Streamlit native components
+    st.markdown("""
+        <style>
+        .custom-table-container {
+            background: white;
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+        }
+        .custom-table-header {
+            color: #424242;
+            padding: 12px 16px;
+            font-weight: 500;
+            font-size: 13px;
+            letter-spacing: 0.3px;
+            text-align: left;
+            background: #f5f5f5;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .custom-table-row {
+            border-bottom: 1px solid #f0f0f0;
+            transition: all 0.15s ease;
+        }
+        .custom-table-row:hover .custom-table-cell {
+            background-color: #fafafa;
+        }
+        .custom-table-cell {
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #424242;
+            transition: background-color 0.15s ease;
+        }
+        .row-checkout-soon .custom-table-cell {
+            background-color: #ffebee !important;
+        }
+        .row-checkin-soon .custom-table-cell {
+            background-color: #e8f5e9 !important;
+        }
+        .badge-nights {
+            background-color: #f0f0f0;
+            color: #616161;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .booking-id {
+            font-weight: 500;
+            color: #616161;
+        }
+        div[data-testid="column"] {
+            padding: 0 !important;
+            gap: 0 !important;
+        }
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0 !important;
+        }
+        .stButton button {
+            background: #f5f5f5;
+            color: #424242;
+            border: 1px solid #e0e0e0;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            width: 100%;
+        }
+        .stButton button:hover {
+            background: #e0e0e0;
+            border-color: #bdbdbd;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Container for table
+    st.markdown('<div class="custom-table-container">', unsafe_allow_html=True)
+    
+    # Table header - using columns
+    header_cols = st.columns([1.5, 2.5, 1.5, 1.5, 1, 1.2])
+    header_labels = ["Booking ID", "Guest Name", "Check-In", "Check-Out", "Nights", "Details"]
+    for col, label in zip(header_cols, header_labels):
+        with col:
+            st.markdown(f'<div class="custom-table-header">{label}</div>', unsafe_allow_html=True)
+    
+    # Table rows
+    for idx, row_data in df.iterrows():
+        # Determine row class based on dates
+        row_class = ""
         try:
-            checkout_str = row['Check-Out']
-            checkin_str = row['Check-In']
+            checkout_str = row_data['Check-Out']
+            checkin_str = row_data['Check-In']
             
-            # Process check-out date
             if isinstance(checkout_str, str):
                 checkout_date = date.fromisoformat(checkout_str)
             else:
                 checkout_date = checkout_str
                 
-            # Process check-in date
             if isinstance(checkin_str, str):
                 checkin_date = date.fromisoformat(checkin_str)
             else:
@@ -319,22 +466,73 @@ if st.session_state.bookings_table_visible and st.session_state.bookings_data:
             days_until_checkout = (checkout_date - date.today()).days
             days_until_checkin = (checkin_date - date.today()).days
             
-            # Priority: Check-out takes precedence over check-in for styling
-            # If check-out is within 2 days or less (including today and past dates)
             if days_until_checkout <= 2:
-                return ['background-color: #ffebee'] * len(row)  # Light red background
-            # If check-in is within 2 days or less (including today and past dates)
+                row_class = "row-checkout-soon"
             elif (days_until_checkin <= 2) and (days_until_checkin >= 0):
-                return ['background-color: #e8f5e8'] * len(row)  # Light green background
-            else:
-                return [''] * len(row)
+                row_class = "row-checkin-soon"
         except:
-            return [''] * len(row)
+            pass
+        
+        # Create columns for each row
+        row_cols = st.columns([1.5, 2.5, 1.5, 1.5, 1, 1.2])
+        
+        # Determine cell background color based on dates
+        cell_bg = ""
+        if row_class == "row-checkout-soon":
+            cell_bg = "background-color: #ffebee;"
+        elif row_class == "row-checkin-soon":
+            cell_bg = "background-color: #e8f5e9;"
+        
+        with row_cols[0]:
+            st.markdown(f'<div class="custom-table-cell" style="{cell_bg}"><span class="booking-id">{row_data["Booking ID"]}</span></div>', unsafe_allow_html=True)
+        
+        with row_cols[1]:
+            st.markdown(f'<div class="custom-table-cell" style="{cell_bg}">{row_data["Name and Surname"]}</div>', unsafe_allow_html=True)
+        
+        with row_cols[2]:
+            st.markdown(f'<div class="custom-table-cell" style="{cell_bg}">{row_data["Check-In"]}</div>', unsafe_allow_html=True)
+        
+        with row_cols[3]:
+            st.markdown(f'<div class="custom-table-cell" style="{cell_bg}">{row_data["Check-Out"]}</div>', unsafe_allow_html=True)
+        
+        with row_cols[4]:
+            st.markdown(f'<div class="custom-table-cell" style="{cell_bg}"><span class="badge-nights">{row_data["Nº Nights"]} nights</span></div>', unsafe_allow_html=True)
+        
+        with row_cols[5]:
+            if st.button("📋 View", key=f"btn_view_{idx}", use_container_width=True):
+                # Use data directly from the DataFrame row
+                matching_event = {
+                    "id": f"booking-{row_data.get('Record ID', idx)}",
+                    "title": f"{row_data['Name and Surname']}",
+                    "start": row_data['Check-In'],
+                    "end": row_data['Check-Out'],
+                    "extendedProps": {
+                        "record_id": row_data.get('Record ID', 'N/A'),
+                        "booking_id": row_data['Booking ID'],
+                        "booking_number": row_data.get('Booking Number', 'N/A'),
+                        "guest_name": row_data['Name and Surname'],
+                        "check_in": row_data['Check-In'],
+                        "check_out": row_data['Check-Out'],
+                        "status": row_data.get('Status', 'N/A'),
+                        "nights": row_data['Nº Nights'],
+                        "persons": row_data.get('Persons', 'N/A'),
+                        "adults": row_data.get('Adults', 'N/A'),
+                        "children": row_data.get('Children', 'N/A'),
+                        "email": row_data.get('Email', ''),
+                        "phone": row_data.get('Phone', ''),
+                        "price": row_data.get('Price', 'N/A'),
+                        "charges": row_data.get('Charges', 'N/A'),
+                        "electric_allowance": row_data.get('Allowance electric', 'N/A'),
+                        "source": "table_button"
+                    }
+                }
+                
+                st.session_state["selected_event"] = matching_event
+                st.session_state["show_modal"] = True
+                st.rerun()
     
-    # Apply the styling
-    styled_df = df.style.apply(highlight_dates_soon, axis=1)
-    
-    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    # Close container
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------- Calendar ----------------
 st.subheader("🗓️ Calendar with events (click an event)")
@@ -721,8 +919,10 @@ def _render_event_detail(ev: dict):
         st.markdown("#### 💰 Financial Information")
         price = ext.get('price', 'N/A')
         charges = ext.get('charges', 'N/A')
+        electric_allowance = ext.get('electric_allowance', None)
         st.markdown(f"**Price:** {price}")
         st.markdown(f"**Comm & Charges:** {charges}")
+        st.markdown(f"**Electric Allowance:** {electric_allowance}")
     
     # Contact information in separate section
     st.divider()
@@ -739,7 +939,7 @@ def _render_event_detail(ev: dict):
     with contact_col2:
         phone = ext.get('phone', '')
         if phone:
-            st.markdown(f"**Mobile:** [{phone}](tel:{phone})")
+            st.markdown(f"**Mobile:** {phone}")
         else:
             st.markdown("**Mobile:** Not available")
     
@@ -762,3 +962,4 @@ if st.session_state.get("show_modal") and st.session_state.get("selected_event")
 elif st.session_state.get("selected_event") and not _has_dialog:
     st.warning("Your Streamlit version doesn't support `st.dialog`. Showing detail inline.")
     _render_event_detail(st.session_state["selected_event"])
+

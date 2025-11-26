@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bookings Table</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .table-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+        }
+
+        .table-header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        thead th {
+            padding: 16px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+            color: #495057;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #e9ecef;
+            transition: all 0.2s ease;
+        }
+
+        tbody tr:hover {
+            background-color: #f1f3f5;
+            transform: scale(1.01);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        tbody td {
+            padding: 16px 12px;
+            font-size: 14px;
+            color: #212529;
+        }
+
+        /* Row color coding */
+        tbody tr.checkout-soon {
+            background-color: #ffebee;
+        }
+
+        tbody tr.checkout-soon:hover {
+            background-color: #ffcdd2;
+        }
+
+        tbody tr.checkin-soon {
+            background-color: #e8f5e8;
+        }
+
+        tbody tr.checkin-soon:hover {
+            background-color: #c8e6c9;
+        }
+
+        /* Button styles */
+        .btn-view {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-view:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-view:active {
+            transform: translateY(0);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-nights {
+            background-color: #e7f5ff;
+            color: #1971c2;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .table-wrapper {
+                overflow-x: scroll;
+            }
+            
+            table {
+                min-width: 800px;
+            }
+        }
+
+        /* Loading state */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #868e96;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #868e96;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="table-header">
+            <h2>📋 Bookings - Next 2 Weeks</h2>
+        </div>
+        
+        <div class="table-wrapper">
+            <table id="bookingsTable">
+                <thead>
+                    <tr>
+                        <th>Booking ID</th>
+                        <th>Guest Name</th>
+                        <th>Check-In</th>
+                        <th>Check-Out</th>
+                        <th>Nights</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="6" class="loading">Loading data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Function to parse date string
+        function parseDate(dateStr) {
+            return new Date(dateStr);
+        }
+
+        // Function to calculate days until date
+        function daysUntil(dateStr) {
+            const target = parseDate(dateStr);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diffTime = target - today;
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        // Function to determine row class based on dates
+        function getRowClass(checkIn, checkOut) {
+            const daysToCheckout = daysUntil(checkOut);
+            const daysToCheckin = daysUntil(checkIn);
+
+            if (daysToCheckout <= 2) {
+                return 'checkout-soon';
+            } else if (daysToCheckin <= 2 && daysToCheckin >= 0) {
+                return 'checkin-soon';
+            }
+            return '';
+        }
+
+        // Function to handle view button click
+        function viewDetails(bookingId) {
+            // Send message to parent (Streamlit)
+            window.parent.postMessage({
+                type: 'VIEW_BOOKING',
+                bookingId: bookingId
+            }, '*');
+        }
+
+        // Function to populate table
+        function populateTable(data) {
+            const tbody = document.getElementById('tableBody');
+            
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="no-data">No bookings found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            data.forEach(booking => {
+                const row = document.createElement('tr');
+                const rowClass = getRowClass(booking['Check-In'], booking['Check-Out']);
+                if (rowClass) {
+                    row.className = rowClass;
+                }
+
+                row.innerHTML = `
+                    <td><strong>${booking['Booking ID']}</strong></td>
+                    <td>${booking['Name and Surname']}</td>
+                    <td>${booking['Check-In']}</td>
+                    <td>${booking['Check-Out']}</td>
+                    <td><span class="badge badge-nights">${booking['Nº Nights']} nights</span></td>
+                    <td>
+                        <button class="btn-view" onclick="viewDetails(${booking['Booking ID']})">
+                            📋 View Details
+                        </button>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+            });
+        }
+
+        // Listen for data from Streamlit
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'BOOKINGS_DATA') {
+                populateTable(event.data.data);
+            }
+        });
+
+        // Request initial data
+        window.parent.postMessage({ type: 'REQUEST_DATA' }, '*');
+    </script>
+</body>
+</html>
