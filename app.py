@@ -342,21 +342,12 @@ if st.session_state.bookings_table_visible and st.session_state.bookings_data:
     electric_str = os.getenv('ELECTRIC', '')
     electric_bookings = [b.strip() for b in electric_str.split(',') if b.strip()]
     
-    # Debug: Print electric bookings list
-    print(f"🔌 Electric bookings from .env: {electric_bookings}")
-    print(f"🔌 Raw ELECTRIC value: '{electric_str}'")
-    
     # Add Electric Allowance column
     df['Allowance electric'] = df.apply(
         lambda row: row['Nº Nights'] * 4 if str(row['Booking ID']).strip() in electric_bookings else 'N/A',
         axis=1
     )
     
-    # Debug: Print DataFrame
-    print("📊 DataFrame creado:")
-    print(df)
-    print(f"\nColumnas: {df.columns.tolist()}")
-    print(f"Forma: {df.shape}")
     
     # Custom table with integrated buttons using Streamlit native components
     st.markdown("""
