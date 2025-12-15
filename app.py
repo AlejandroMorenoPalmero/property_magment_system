@@ -55,13 +55,67 @@ st.title("🏠 Property Manager")
 st.caption("Version 0.0.1")
 
 # ---------------- Bookings table (next 2 weeks) ----------------
-st.subheader("📋 Bookings 2 weeks")
+st.subheader("📋 Bookings")
+
+# Initialize date range in session state if not exists
+if 'date_range_days' not in st.session_state:
+    st.session_state.date_range_days = 14  # Default 2 weeks
+if 'custom_start_date' not in st.session_state:
+    st.session_state.custom_start_date = None
+if 'custom_end_date' not in st.session_state:
+    st.session_state.custom_end_date = None
+
+# Date range selection
+col_selector1, col_selector2, col_selector3 = st.columns([2, 2, 2])
+
+with col_selector1:
+    date_mode = st.radio(
+        "Date range mode:",
+        ["Next days", "Custom dates"],
+        horizontal=True,
+        key="date_mode"
+    )
+
+if date_mode == "Next days":
+    with col_selector2:
+        days = st.number_input(
+            "Days from today:",
+            min_value=1,
+            max_value=365,
+            value=st.session_state.date_range_days,
+            step=7,
+            key="days_input"
+        )
+        st.session_state.date_range_days = days
+    with col_selector3:
+        st.markdown(f"**From:** {date.today().strftime('%Y-%m-%d')}")
+        st.markdown(f"**To:** {(date.today() + timedelta(days=days)).strftime('%Y-%m-%d')}")
+else:
+    with col_selector2:
+        start_date = st.date_input(
+            "Start date:",
+            value=st.session_state.custom_start_date or date.today(),
+            key="start_date_input"
+        )
+        st.session_state.custom_start_date = start_date
+    with col_selector3:
+        end_date = st.date_input(
+            "End date:",
+            value=st.session_state.custom_end_date or (date.today() + timedelta(days=14)),
+            min_value=start_date,
+            key="end_date_input"
+        )
+        st.session_state.custom_end_date = end_date
 
 # Auto-load bookings data if not already loaded
 if st.session_state.bookings_table_visible and st.session_state.bookings_data is None:
-    # Calculate date range (from today for next 2 weeks)
-    today = date.today()
-    end_date = today + timedelta(days=14)  # From today + 2 weeks
+    # Calculate date range based on mode
+    if date_mode == "Next days":
+        today = date.today()
+        end_date = today + timedelta(days=st.session_state.date_range_days)
+    else:
+        today = st.session_state.custom_start_date
+        end_date = st.session_state.custom_end_date
     
     try:
         # Load fresh data from DB
@@ -184,7 +238,7 @@ if st.session_state.bookings_table_visible and st.session_state.bookings_data is
 
 colA, colB = st.columns([1, 3], vertical_alignment="center")
 with colA:
-    cargar = st.button("Refresh bookings", use_container_width=True)  # Changed text to "Refresh"
+    cargar = st.button("Load/Refresh bookings", use_container_width=True)
     
 with colB:
     if st.session_state.bookings_table_visible:
@@ -195,9 +249,13 @@ with colB:
 
 if cargar:
     try:
-        # Calculate date range (from today for next 2 weeks)
-        today = date.today()
-        end_date = today + timedelta(days=14)  # From today + 2 weeks
+        # Calculate date range based on mode
+        if st.session_state.date_mode == "Next days":
+            today = date.today()
+            end_date = today + timedelta(days=st.session_state.date_range_days)
+        else:
+            today = st.session_state.custom_start_date
+            end_date = st.session_state.custom_end_date
         
         # Load fresh data from DB
         cols_fresh, rows_fresh = fetch_table("bookings")  
@@ -528,6 +586,55 @@ if st.session_state.bookings_table_visible and st.session_state.bookings_data:
 # ---------------- Calendar ----------------
 st.subheader("🗓️ Calendar with events (click an event)")
 
+# Initialize calendar navigation state
+if 'calendar_month' not in st.session_state:
+    st.session_state.calendar_month = date.today().month
+if 'calendar_year' not in st.session_state:
+    st.session_state.calendar_year = date.today().year
+
+# Calendar navigation controls
+nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2, 2, 1, 3])
+
+with nav_col1:
+    months = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+        5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+        9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+    selected_month = st.selectbox(
+        "Mes:",
+        options=list(months.keys()),
+        format_func=lambda x: months[x],
+        index=st.session_state.calendar_month - 1,
+        key="month_selector"
+    )
+    if selected_month != st.session_state.calendar_month:
+        st.session_state.calendar_month = selected_month
+        st.rerun()
+
+with nav_col2:
+    # Generate year range (current year ± 5 years)
+    current_year = date.today().year
+    year_range = list(range(current_year - 2, current_year + 5))
+    selected_year = st.selectbox(
+        "Año:",
+        options=year_range,
+        index=year_range.index(st.session_state.calendar_year),
+        key="year_selector",
+        label_visibility="visible"
+    )
+    if selected_year != st.session_state.calendar_year:
+        st.session_state.calendar_year = selected_year
+        st.rerun()
+
+with nav_col3:
+    st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)  # Spacer to align with selectbox
+    if st.button("📅 Hoy", use_container_width=True):
+        st.session_state.calendar_month = date.today().month
+        st.session_state.calendar_year = date.today().year
+        st.rerun()
+
+
 def convert_db_to_events(cols, rows):
     """
     Converts DB data to the format required by FullCalendar
@@ -536,6 +643,10 @@ def convert_db_to_events(cols, rows):
                           'Status', 'Email', 'Movil', 'Comm y Cargos', 'Precio']
     """
     events = []
+    
+    # Get electric booking IDs from environment variable
+    electric_str = os.getenv('ELECTRIC', '')
+    electric_bookings = [b.strip() for b in electric_str.split(',') if b.strip()]
     
     # Create column mapping for easy access
     col_map = {col: idx for idx, col in enumerate(cols)}
@@ -574,6 +685,9 @@ def convert_db_to_events(cols, rows):
             else:
                 check_out = check_out_raw
             
+            # Calculate electric allowance
+            electric_allowance = nights * 4 if str(booking_id).strip() in electric_bookings else 'N/A'
+            
             # Create descriptive title for the event
             title = f"{guest_name}"
             if status:
@@ -610,6 +724,7 @@ def convert_db_to_events(cols, rows):
                     # Financial (already converted by safe_convert_value)
                     "price": price,
                     "charges": charges,
+                    "electric_allowance": electric_allowance,
                     
                     # Meta
                     "source": "database"
@@ -666,13 +781,17 @@ for ev in events:
 viewport_width = st_javascript("window.innerWidth", key="viewport_width")
 viewport_height = st_javascript("window.innerHeight", key="viewport_height")
 
+# Calculate initial date for calendar based on selected month/year
+initial_date = date(st.session_state.calendar_year, st.session_state.calendar_month, 1).isoformat()
+
 # ---------------- Options ----------------
 options = {
     "initialView": "dayGridMonth",
+    "initialDate": initial_date,  # Set the calendar to the selected month/year
     "locale": "es",
     "firstDay": 1,
     "headerToolbar": {
-        "left": "prev,next today",
+        "left": "prev,next",
         "center": "title",
         "right": "dayGridMonth,timeGridWeek,timeGridDay,listWeek"
     },
@@ -848,7 +967,9 @@ else:
 """
 
 # ---------------- Calendar ----------------
-returned = calendar(events=_events_fixed, options=options, key="cal1", custom_css=custom_css)
+# Use dynamic key to force re-render when month/year changes
+calendar_key = f"cal_{st.session_state.calendar_year}_{st.session_state.calendar_month}"
+returned = calendar(events=_events_fixed, options=options, key=calendar_key, custom_css=custom_css)
 
 
 # ----------- Capture clicks -----------  
@@ -911,9 +1032,15 @@ def _render_event_detail(ev: dict):
         price = ext.get('price', 'N/A')
         charges = ext.get('charges', 'N/A')
         electric_allowance = ext.get('electric_allowance', None)
-        st.markdown(f"**Price:** {price}")
-        st.markdown(f"**Comm & Charges:** {charges}")
-        st.markdown(f"**Electric Allowance:** {electric_allowance}")
+        
+        # Format monetary values with € symbol
+        price_display = f"{price} €" if price != 'N/A' and price is not None else 'N/A'
+        charges_display = f"{charges} €" if charges != 'N/A' and charges is not None else 'N/A'
+        electric_display = f"{electric_allowance} €" if electric_allowance != 'N/A' and electric_allowance is not None else 'N/A'
+        
+        st.markdown(f"**Price:** {price_display}")
+        st.markdown(f"**Comm & Charges:** {charges_display}")
+        st.markdown(f"**Electric Allowance:** {electric_display}")
     
     # Contact information in separate section
     st.divider()
@@ -930,7 +1057,10 @@ def _render_event_detail(ev: dict):
     with contact_col2:
         phone = ext.get('phone', '')
         if phone:
-            st.markdown(f"**Mobile:** {phone}")
+            # Clean phone number and create WhatsApp link
+            phone_clean = str(phone).replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '')
+            whatsapp_link = f"https://wa.me/{phone_clean}"
+            st.markdown(f"**Mobile:** [📱 {phone}]({whatsapp_link})")
         else:
             st.markdown("**Mobile:** Not available")
     
