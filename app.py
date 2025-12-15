@@ -689,9 +689,7 @@ def convert_db_to_events(cols, rows):
             electric_allowance = nights * 4 if str(booking_id).strip() in electric_bookings else 'N/A'
             
             # Create descriptive title for the event
-            title = f"{guest_name}"
-            if status:
-                title += f" ({status})"
+            title = f"{booking_id} - {guest_name}"
             
             # Create event for FullCalendar
             event = {
