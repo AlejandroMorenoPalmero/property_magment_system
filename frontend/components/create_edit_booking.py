@@ -13,7 +13,6 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
 from shared.database_utils import fetch_table
-from backend.database.connection import get_connection
 from ..config import STATUS_OPTIONS
 from ..utils.validators import validate_booking_data, calculate_nights
 
@@ -131,7 +130,15 @@ def render_booking_form(mode="create", booking_data=None):
             # Validate
             if validate_booking_data(booking_id, guest_name, check_in, check_out):
                 try:
-                    conn = get_connection()
+                    # Note: This still uses direct DB access via shared.database_utils
+                    # For full API integration, you would need to add create/update endpoints
+                    # and use api_client here. For now, keeping shared.database_utils
+                    # since it's available in both containers.
+                    
+                    import mysql.connector
+                    from shared.constants import get_db_config
+                    
+                    conn = mysql.connector.connect(**get_db_config())
                     cursor = conn.cursor()
                     
                     if mode == "create":
@@ -170,6 +177,7 @@ def render_booking_form(mode="create", booking_data=None):
                     cursor.execute(query, values)
                     conn.commit()
                     cursor.close()
+                    conn.close()
                     
                     # Reload data
                     cols, rows = fetch_table("bookings")
@@ -224,24 +232,28 @@ def render_create_edit_page():
         if st.button("🔎 Search", use_container_width=True):
             if search_value:
                 try:
-                    conn = get_connection()
-                    cursor = conn.cursor()
+                    # Load all bookings and search in memory
+                    columns, rows = fetch_table("bookings")
+                    col_map = {col: idx for idx, col in enumerate(columns)}
                     
+                    result = None
                     if search_by == "Booking ID":
-                        query = "SELECT * FROM bookings WHERE `Booking ID` = %s"
+                        for row in rows:
+                            if row[col_map['Booking ID']] == search_value:
+                                result = row
+                                break
                     elif search_by == "Guest Name":
-                        query = "SELECT * FROM bookings WHERE `Nombre,Apellidos` LIKE %s"
-                        search_value = f"%{search_value}%"
+                        for row in rows:
+                            if search_value.lower() in str(row[col_map['Nombre,Apellidos']]).lower():
+                                result = row
+                                break
                     else:  # Record ID
-                        query = "SELECT * FROM bookings WHERE ID = %s"
-                    
-                    cursor.execute(query, (search_value,))
-                    result = cursor.fetchone()
+                        for row in rows:
+                            if str(row[col_map['ID']]) == search_value:
+                                result = row
+                                break
                     
                     if result:
-                        columns = [desc[0] for desc in cursor.description]
-                        col_map = {col: idx for idx, col in enumerate(columns)}
-                        
                         booking_data = {
                             'record_id': result[col_map['ID']],
                             'booking_id': result[col_map['Booking ID']],
@@ -263,8 +275,6 @@ def render_create_edit_page():
                         st.success(f"✅ Found booking: {booking_data['guest_name']}")
                     else:
                         st.warning(f"⚠️ No booking found with {search_by}: {search_value}")
-                    
-                    cursor.close()
                     
                 except Exception as e:
                     st.error(f"❌ Error searching: {e}")

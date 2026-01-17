@@ -13,7 +13,7 @@ import os
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
-from backend.database.connection import get_connection
+from shared.database_utils import fetch_table
 from ..config import STATUS_OPTIONS
 from ..utils.converters import safe_convert_value
 
@@ -27,11 +27,13 @@ def render_search_bookings_page():
     
     # Load all unique Booking IDs from database
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT `Booking ID` FROM bookings ORDER BY `Booking ID`")
-        booking_ids = [row[0] for row in cursor.fetchall() if row[0]]
-        cursor.close()
+        # Use shared database utils instead of direct connection
+        cols, rows = fetch_table("bookings")
+        booking_id_idx = cols.index('Booking ID') if 'Booking ID' in cols else None
+        if booking_id_idx is not None:
+            booking_ids = sorted(list(set([row[booking_id_idx] for row in rows if row[booking_id_idx]])))
+        else:
+            booking_ids = []
     except Exception as e:
         st.error(f"Error loading Booking IDs: {e}")
         booking_ids = []
@@ -130,82 +132,103 @@ def render_search_bookings_page():
     if search_button or 'search_results' in st.session_state:
         if search_button:
             try:
-                conn = get_connection()
-                cursor = conn.cursor()
+                # Load all bookings from database using shared utils
+                cols, rows = fetch_table("bookings")
+                col_map = {col: idx for idx, col in enumerate(cols)}
                 
-                # Build dynamic query
-                query = "SELECT * FROM bookings WHERE 1=1"
-                params = []
+                # Filter results based on criteria
+                filtered_results = []
                 
-                # Add filters
-                if booking_id_filter and booking_id_filter != "All":
-                    query += " AND `Booking ID` = %s"
-                    params.append(booking_id_filter)
+                # Apply filters in Python
+                for row in rows:
+                    # Booking ID filter
+                    if booking_id_filter and booking_id_filter != "All":
+                        if row[col_map.get('Booking ID')] != booking_id_filter:
+                            continue
+                    
+                    # Guest name filter
+                    if guest_name_filter:
+                        guest_name = str(row[col_map.get('Nombre,Apellidos', '')] or '')
+                        if guest_name_filter.lower() not in guest_name.lower():
+                            continue
+                    
+                    # Booking number filter
+                    if booking_number_filter:
+                        booking_num = str(row[col_map.get('Nº Booking', '')] or '')
+                        if booking_number_filter.lower() not in booking_num.lower():
+                            continue
+                    
+                    # Check-In Range filter
+                    if check_in_start:
+                        row_checkin = row[col_map.get('Check-In')]
+                        if row_checkin:
+                            if isinstance(row_checkin, str):
+                                from datetime import datetime
+                                row_checkin = datetime.strptime(row_checkin, '%Y-%m-%d').date()
+                            if check_in_end:
+                                if not (check_in_start <= row_checkin <= check_in_end):
+                                    continue
+                            else:
+                                if row_checkin < check_in_start:
+                                    continue
+                    
+                    # Check-Out Range filter
+                    if check_out_start:
+                        row_checkout = row[col_map.get('Check-Out')]
+                        if row_checkout:
+                            if isinstance(row_checkout, str):
+                                from datetime import datetime
+                                row_checkout = datetime.strptime(row_checkout, '%Y-%m-%d').date()
+                            if check_out_end:
+                                if not (check_out_start <= row_checkout <= check_out_end):
+                                    continue
+                            else:
+                                if row_checkout < check_out_start:
+                                    continue
+                    
+                    # Any Date Range filter (overlapping bookings)
+                    if date_range_start and date_range_end:
+                        row_checkin = row[col_map.get('Check-In')]
+                        row_checkout = row[col_map.get('Check-Out')]
+                        if row_checkin and row_checkout:
+                            if isinstance(row_checkin, str):
+                                from datetime import datetime
+                                row_checkin = datetime.strptime(row_checkin, '%Y-%m-%d').date()
+                            if isinstance(row_checkout, str):
+                                from datetime import datetime
+                                row_checkout = datetime.strptime(row_checkout, '%Y-%m-%d').date()
+                            if not (row_checkin <= date_range_end and row_checkout >= date_range_start):
+                                continue
+                    
+                    # Status filter
+                    if status_filter:
+                        if row[col_map.get('Status')] not in status_filter:
+                            continue
+                    
+                    # Nights filters
+                    if min_nights > 0:
+                        nights = row[col_map.get('Nº Noches', 0)] or 0
+                        if nights < min_nights:
+                            continue
+                    
+                    if max_nights > 0:
+                        nights = row[col_map.get('Nº Noches', 0)] or 0
+                        if nights > max_nights:
+                            continue
+                    
+                    # Email filter
+                    if email_filter:
+                        email = str(row[col_map.get('Email', '')] or '')
+                        if email_filter.lower() not in email.lower():
+                            continue
+                    
+                    # Passed all filters
+                    filtered_results.append(row)
                 
-                if guest_name_filter:
-                    query += " AND `Nombre,Apellidos` LIKE %s"
-                    params.append(f"%{guest_name_filter}%")
-                
-                if booking_number_filter:
-                    query += " AND `Nº Booking` LIKE %s"
-                    params.append(f"%{booking_number_filter}%")
-                
-                # Check-In Range filter
-                if check_in_start:
-                    if check_in_end:
-                        # Range specified
-                        query += " AND `Check-In` >= %s AND `Check-In` <= %s"
-                        params.append(check_in_start)
-                        params.append(check_in_end)
-                    else:
-                        # Only start date - all check-ins from this date forward
-                        query += " AND `Check-In` >= %s"
-                        params.append(check_in_start)
-                
-                # Check-Out Range filter
-                if check_out_start:
-                    if check_out_end:
-                        # Range specified
-                        query += " AND `Check-Out` >= %s AND `Check-Out` <= %s"
-                        params.append(check_out_start)
-                        params.append(check_out_end)
-                    else:
-                        # Only start date - all check-outs from this date forward
-                        query += " AND `Check-Out` >= %s"
-                        params.append(check_out_start)
-                
-                # Any Date Range filter (overlapping bookings)
-                if date_range_start and date_range_end:
-                    query += " AND `Check-In` <= %s AND `Check-Out` >= %s"
-                    params.append(date_range_end)
-                    params.append(date_range_start)
-                
-                if status_filter:
-                    placeholders = ','.join(['%s'] * len(status_filter))
-                    query += f" AND `Status` IN ({placeholders})"
-                    params.extend(status_filter)
-                
-                if min_nights > 0:
-                    query += " AND `Nº Noches` >= %s"
-                    params.append(min_nights)
-                
-                if max_nights > 0:
-                    query += " AND `Nº Noches` <= %s"
-                    params.append(max_nights)
-                
-                if email_filter:
-                    query += " AND `Email` LIKE %s"
-                    params.append(f"%{email_filter}%")
-                
-                # Order by most recent
-                query += " ORDER BY `Check-In` DESC"
-                
-                # Execute query
-                cursor.execute(query, params)
-                results = cursor.fetchall()
-                columns = [desc[0] for desc in cursor.description]
-                
-                cursor.close()
+                # Sort by Check-In descending
+                filtered_results.sort(key=lambda x: x[col_map.get('Check-In')] or '', reverse=True)
+                results = filtered_results
+                columns = cols
                 
                 # Store results in session state
                 st.session_state.search_results = {

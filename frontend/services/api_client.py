@@ -22,7 +22,9 @@ class APIClient:
             base_url: Base URL for the API (defaults to env variable or localhost)
             timeout: Request timeout in seconds
         """
-        self.base_url = base_url or os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
+        # Use BACKEND_URL from environment (set in docker-compose.yml)
+        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+        self.base_url = base_url or f"{backend_url}/api/v1"
         self.timeout = timeout
         self.client = httpx.Client(base_url=self.base_url, timeout=self.timeout)
     

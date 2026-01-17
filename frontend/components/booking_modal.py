@@ -14,7 +14,6 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 sys.path.insert(0, parent_dir)
 
 from shared.database_utils import fetch_table
-from backend.database.connection import get_connection
 from ..config import STATUS_OPTIONS, STATUS_COLORS, STATUS_EMOJIS
 from ..utils.formatters import format_monetary_value, format_phone_for_whatsapp
 
@@ -156,7 +155,11 @@ def render_booking_detail_edit(ev: dict, record_id):
         if save_button:
             if new_booking_id and new_guest_name and new_check_in and new_check_out and new_check_out > new_check_in:
                 try:
-                    conn = get_connection()
+                    # Use shared database utils (available in both containers)
+                    import mysql.connector
+                    from shared.constants import get_db_config
+                    
+                    conn = mysql.connector.connect(**get_db_config())
                     cursor = conn.cursor()
                     
                     query = """
